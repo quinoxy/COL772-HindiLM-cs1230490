@@ -40,16 +40,65 @@ class SingleAttentionHead(nn.Module):
 
 class MultiHeadAttention(nn.Module):
     def __init__(self, config : Dict[str, Any]):
-        n_heads = config["n_heads"]
+        super().__init__()
+        self.n_heads = config["n_heads"]
+        self.d_model = config["d_model"]
+        self.d_head = config["d_head"]
+        self.tanh_mode = True if (config["mode"] == "tanh_clipped") else False
+        self.tau = config["tau"]
+        self.q_mat = nn.Linear(self.d_model, self.d_model, bias= False)
+        self.k_mat = nn.Linear(self.d_model, self.d_model, bias= False)
+        self.v_mat = nn.Linear(self.d_model, self.d_model, bias= False)
+        self.concat_mat = nn.Linear(self.d_model, self.d_model, bias= False)
+        
+
+    def set_weights(self, weights : Dict[str, Any], layer_no):
+        self.concat_mat.weight.data = weights[f"W_{layer_no}_O"]
+        for i in range(1,self.n_heads + 1):
+            self.q_mat.weight.data[(i-1) * self.d_head : i * self.d_head, :] = weights[f"W_{layer_no}_Q_{i}"]
+            self.k_mat.weight.data[(i-1) * self.d_head : i * self.d_head, :] = weights[f"W_{layer_no}_K_{i}"]
+            self.v_mat.weight.data[(i-1) * self.d_head : i * self.d_head, :] = weights[f"W_{layer_no}_V_{i}"]
+
+    def forward(self, inputs, attention_mask, causal_attention_mask):
+
+        batch_size = inputs.shape[0]
+        seq_len = inputs.shape[1]
+
+        #making all matrices (batch_size, n_heads, seq_len, d_head)
+        Q_mat = self.q_mat(inputs).reshape(batch_size, seq_len, self.n_heads, self.d_head).transpose(1,2)
+        K_mat = self.k_mat(inputs).reshape(batch_size, seq_len, self.n_heads, self.d_head).transpose(1,2)
+        V_mat = self.v_mat(inputs).reshape(batch_size, seq_len, self.n_heads, self.d_head).transpose(1,2)
 
 
-    def set_weights(self, weights : Dict[str, Any]):
-        pass
+        K_mat = K_mat.transpose(-2,-1)
+
+        # S matrix has dim (batch_size, n_heads, seq_len, seq_len)
+        S_mat = torch.matmul(Q_mat, K_mat) / math.sqrt(self.d_head)
+
+        S_mat = S_mat + causal_attention_mask
+        S_mat = S_mat + attention_mask
+
+        if (self.tanh_mode):
+            S_mat.tanh_()
+            S_mat.mul_(self.tau)
+        
+        attn = torch.softmax(S_mat, dim = -1)
+
+        # attn * V will be (batch_size, n_heads, seq_len, d_head)
+        # we will first transpose to (batch_size, seq_len, n_heads, d_head)
+        # then reshape to (batch_size, seq_len, d_model)
+        concatenated_result = torch.matmul(attn, V_mat).transpose(1,2).reshape(batch_size, seq_len, self.d_model)
+        return self.concat_mat(concatenated_result)
+
+
+
+        
 
     def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor :
         pass
 
 class TransformerBlock(nn.Module):
+
     def __init__(self, config : Dict[str, Any]):
         self.config = config
         super().__init__()
