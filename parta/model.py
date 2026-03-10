@@ -4,37 +4,37 @@ from typing import Any, Dict, List
 import math
 
 
-class SingleAttentionHead(nn.Module):
-    def __init__(self, config : Dict[str, Any]):
-        super().__init__()
-        d_model = config["d_model"]
-        self.d_head = config["d_head"]
-        self.tanh_mode = True if (config["mode"] == "tanh_clipped") else False
-        self.tau = config["tau"]
-        self.query = nn.Linear(d_model, self.d_head, bias = False)
-        self.value = nn.Linear(d_model, self.d_head, bias = False)
-        self.key = nn.Linear(d_model, self.d_head, bias = False)
+# class SingleAttentionHead(nn.Module):
+#     def __init__(self, config : Dict[str, Any]):
+#         super().__init__()
+#         d_model = config["d_model"]
+#         self.d_head = config["d_head"]
+#         self.tanh_mode = True if (config["mode"] == "tanh_clipped") else False
+#         self.tau = config["tau"]
+#         self.query = nn.Linear(d_model, self.d_head, bias = False)
+#         self.value = nn.Linear(d_model, self.d_head, bias = False)
+#         self.key = nn.Linear(d_model, self.d_head, bias = False)
 
-    def set_weights(self, weights : Dict[str, Any], layer_no, head_no):
-        query_string = f"W_{layer_no}_Q_{head_no}"
-        key_string = f"W_{layer_no}_K_{head_no}"
-        value_string = f"W_{layer_no}_V_{head_no}"
-        self.query.weight.data = weights[query_string]
-        self.key.weight.data = weights[key_string]
-        self.value.weight.data = weights[value_string]
+#     def set_weights(self, weights : Dict[str, Any], layer_no, head_no):
+#         query_string = f"W_{layer_no}_Q_{head_no}"
+#         key_string = f"W_{layer_no}_K_{head_no}"
+#         value_string = f"W_{layer_no}_V_{head_no}"
+#         self.query.weight.data = weights[query_string]
+#         self.key.weight.data = weights[key_string]
+#         self.value.weight.data = weights[value_string]
 
-    def forward(self, input: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor :
-        query = self.query(input)
-        key = self.key(input)
-        key = key.transpose(-2,-1)
-        value = self.value(input)
-        mat_S = torch.matmul(query, key) / math.sqrt(self.d_head)
-        mat_S = mat_S + attention_mask
-        if (self.tanh_mode):
-            mat_S.tanh_()
-            mat_S.mul_(self.tau)
-        attn = torch.softmax(mat_S, dim = -1)
-        return torch.matmul(attn, value)
+#     def forward(self, input: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor :
+#         query = self.query(input)
+#         key = self.key(input)
+#         key = key.transpose(-2,-1)
+#         value = self.value(input)
+#         mat_S = torch.matmul(query, key) / math.sqrt(self.d_head)
+#         mat_S = mat_S + attention_mask
+#         if (self.tanh_mode):
+#             mat_S.tanh_()
+#             mat_S.mul_(self.tau)
+#         attn = torch.softmax(mat_S, dim = -1)
+#         return torch.matmul(attn, value)
 
 
 
@@ -100,14 +100,38 @@ class MultiHeadAttention(nn.Module):
 class TransformerBlock(nn.Module):
 
     def __init__(self, config : Dict[str, Any]):
-        self.config = config
         super().__init__()
+        self.d_model = config["d_model"]
+        self.ln = nn.LayerNorm(self.d_model, elementwise_affine = True)
+        self.mha = MultiHeadAttention(config)
+        
+        self.seqblock = nn.Sequential(
+            nn.LayerNorm(self.d_model, elementwise_affine = True),
+            nn.Linear(self.d_model, 4 * self.d_model),
+            nn.GELU(),
+            nn.Linear(4*self.d_model, self.d_model)
 
-    def set_weights(self, weights : Dict[str, Any]):
-        pass
+        )
+        
 
-    def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor :
-        pass
+    def set_weights(self, weights : Dict[str, Any], layer_no):
+        self.seqblock[1].weight.data = weights[f"W_{layer_no}_up"]
+        self.seqblock[1].bias.data = weights[f"b_{layer_no}_up"]
+        self.seqblock[3].weight.data = weights[f"W_{layer_no}_down"]
+        self.seqblock[3].bias.data = weights[f"b_{layer_no}_down"]
+        self.mha.set_weights(weights, layer_no)
+        self.ln.weight.data = weights[f"gamma_{layer_no}_1"]
+        self.ln.bias.data = weights[f"beta_{layer_no}_1"]
+        self.seqblock[0].weight.data = weights[f"gamma_{layer_no}_2"]
+        self.seqblock[0].bias.data = weights[f"beta_{layer_no}_2"]
+
+    def forward(self, input: torch.Tensor, attention_mask: torch.Tensor, causal_attention : torch.Tensor) -> torch.Tensor :
+        intermediate1 = self.ln(input)
+        intermediate2 = self.mha(intermediate1, attention_mask, causal_attention)
+        intermediate3 = input + intermediate2
+        intermediate4 = self.seqblock(intermediate3)
+        return intermediate3 + intermediate4
+        
 
 class LanguageModel(nn.Module):
     """
