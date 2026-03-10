@@ -3,6 +3,62 @@ import torch.nn as nn
 from typing import Any, Dict, List
 
 
+class SingleAttentionHead(nn.Module):
+    def __init__(self, config : Dict[str, Any]):
+        d_model = config["d_model"]
+        self.d_head = config["d_head"]
+        self.tanh_mode = True if (config["mode"] == "tanh_clipped") else False
+        self.tau = config("tau")
+        super().__init__()
+        self.query = nn.Linear(d_head, d_model, bias = False)
+        self.value = nn.Linear(d_head, d_model, bias = False)
+        self.key = nn.Linear(d_head, d_model, bias = False)
+
+    def set_weights(self, weights : Dict[str, Any], layer_no, head_no):
+        query_string = "W_"+ str(layer_no) + "_Q_"+ str(head_no)
+        key_string = "W_"+ str(layer_no) + "_K_"+ str(head_no)
+        value_string = "W_"+ str(layer_no) + "_V_"+ str(head_no)
+        self.query.weights = weights[query_string]
+        self.key.weights = weights[key_string]
+        self.value.weights = weights[value_string]
+
+    def forward(self, input: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor :
+        query = self.query(input)
+        key = self.key(input)
+        key.transpose_()
+        value = self.value(input)
+        mat_S = torch.matmul(query, key)
+        mat_S.add_(attention_mask)
+        if (self.tanh_mode):
+            mat_S.tanh_()
+            mat_S.mul_(self.tau)
+        attn = torch.softmax(mat_S, axis = -1)
+        return torch.matmul(mat_S, value)
+
+
+
+class MultiHeadAttention(nn.Module):
+    def __init__(self, config : Dict[str, Any]):
+        n_heads = config["n_heads"]
+
+
+    def set_weights(self, weights : Dict[str, Any]):
+        pass
+
+    def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor :
+        pass
+
+class TransformerBlock(nn.Module):
+    def __init__(self, config : Dict[str, Any]):
+        self.config = config
+        super().__init__()
+
+    def set_weights(self, weights : Dict[str, Any]):
+        pass
+
+    def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor :
+        pass
+
 class LanguageModel(nn.Module):
     """
     This is a stub class for the assignment.
@@ -64,3 +120,9 @@ def collate_fn(batch: Dict[str, List[torch.tensor]]) -> Dict[str, torch.Tensor]:
     """
     PAD_ID = 0  # Assume 0 is the padding token ID
     raise NotImplementedError("Implement collate_fn as described in assignment document")
+
+def main():
+    pass
+
+if __name__ == "__main__":
+    main()
