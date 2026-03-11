@@ -153,6 +153,13 @@ class LanguageModel(nn.Module):
             #nn.Softmax(dim = -1)
         )
 
+        pos = torch.arange(512)
+        mask = pos[None, :] > pos[:, None]
+        causal_attention = torch.zeros(512, 512)
+        causal_attention = causal_attention.masked_fill(mask, -1e9)
+        self.causal_attention = causal_attention[None, None, :, :]
+        
+
         
 
     def set_weights(self, weights: Dict[str, Any]):
@@ -186,13 +193,11 @@ class LanguageModel(nn.Module):
             Logits are the raw, unnormalized scores output by the model, which can be converted to probabilities using a softmax function.
         """
         _, seq_len = input_ids.shape
-        pos = torch.arange(seq_len, device = input_ids.device)
-        mask = pos[None, :] > pos[:, None]
+        
         
 
-        causal_attention = torch.zeros(seq_len, seq_len, device = input_ids.device)
-        causal_attention = causal_attention.masked_fill(mask, -1e9)
-        causal_attention = causal_attention[None, None, :, :]
+        causal_attention = self.causal_attention[:,:,:seq_len,:seq_len]
+        causal_attention = causal_attention.to(input_ids.device)
 
 
         intermediate1 = self.embed(input_ids)
