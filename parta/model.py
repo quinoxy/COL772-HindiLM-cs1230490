@@ -45,7 +45,7 @@ class MultiHeadAttention(nn.Module):
 
         if (self.tanh_mode):
             S_mat = self.tau * torch.tanh(S_mat)
-            
+
         S_mat = S_mat + causal_attention_mask
 
 
@@ -106,19 +106,23 @@ class PositionalEncodingBlock(nn.Module):
     def __init__(self, config: Dict[str, Any]):
         super().__init__()
         self.d_model = config["d_model"]
-    
-    def forward(self, inputs):
-        batch_size, seq_len = inputs.shape
-        pos = torch.arange(seq_len, device = inputs.device).unsqueeze(1)
-        i = torch.arange(0, self.d_model, 2, device = inputs.device)
+
+        pos = torch.arange(512).unsqueeze(1)
+        i = torch.arange(0, self.d_model, 2)
         power = torch.exp(-math.log(10000.0) * i/self.d_model)
         angles = pos*power
         
-        encoding = torch.zeros(seq_len, self.d_model, device = inputs.device)
+        encoding = torch.zeros(512, self.d_model)
 
         encoding[:, 0::2] = torch.sin(angles)
         encoding[:, 1::2] = torch.cos(angles)
-        return encoding.unsqueeze(0)
+        self.encoding = encoding
+    
+    def forward(self, inputs):
+        batch_size, seq_len = inputs.shape
+        new_encoding = self.encoding[:seq_len, :seq_len].unsqueeze(0)
+        new_encoding = new_encoding.to(inputs.device)
+        return new_encoding
 
         
 
