@@ -76,6 +76,11 @@ class MultiHeadAttention(nn.Module):
         S_mat = torch.matmul(Q_mat, K_mat) / math.sqrt(self.d_head)
 
         S_mat = S_mat + causal_attention_mask
+
+
+        attention_mask = (1-attention_mask) * -1e9
+        attention_mask = attention_mask[:,None, None, :]
+
         S_mat = S_mat + attention_mask
 
         if (self.tanh_mode):
@@ -90,12 +95,6 @@ class MultiHeadAttention(nn.Module):
         concatenated_result = torch.matmul(attn, V_mat).transpose(1,2).reshape(batch_size, seq_len, self.d_model)
         return self.concat_mat(concatenated_result)
 
-
-
-        
-
-    def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor :
-        pass
 
 class TransformerBlock(nn.Module):
 
@@ -133,6 +132,27 @@ class TransformerBlock(nn.Module):
         return intermediate3 + intermediate4
         
 
+
+class PositionalEncodingBlock(nn.Module):
+    def __init__(self, config: Dict[str, Any]):
+        super().__init__()
+        self.d_model = config["d_model"]
+    
+    def forward(self, inputs):
+        batch_size, seq_len = inputs.shape
+        pos = torch.arange(seq_len).unsqueeze(1)
+        i = torch.arange(0, self.d_model, 2)
+        power = torch.exp(-math.log(10000.0) * i/self.d_model)
+        angles = pos*power
+        
+        encoding = torch.zeros(seq_len, self.d_model)
+
+        encoding[:, 0::2] = torch.sin(angles)
+        encoding[:, 1::2] = torch.cos(angles)
+        return encoding.unsqueeze(0)
+
+        
+
 class LanguageModel(nn.Module):
     """
     This is a stub class for the assignment.
@@ -143,8 +163,24 @@ class LanguageModel(nn.Module):
         """
         Build the LanguageModel based on the config.
         """
-        self.config = config
         super().__init__()
+
+        self.embed = nn.Embedding(config["vocab_size"], config["d_model"])
+        
+        self.pe = PositionalEncodingBlock(config)
+
+        self.transformerBlocks = nn.ModuleList(
+            [TransformerBlock(config) for _ in range(config["n_layers"])]
+        )
+
+        self.finalLayerNorm = nn.LayerNorm(config["d_model"], elementwise_affine = True)
+        
+        self.devocab_and_softmax = nn.Sequential(
+            nn.Linear(config["d_model"], config["vocab_size"], bias = False),
+            nn.Softmax(dim = -1)
+        )
+
+        
 
     def set_weights(self, weights: Dict[str, Any]):
         """
@@ -155,7 +191,14 @@ class LanguageModel(nn.Module):
         Parameters:
             - weights: A dictionary containing the model's weights. The structure of this dictionary will depend on how you design your model.
         """
-        raise NotImplementedError("Implement set_weights as described in assignment document")
+        self.embed.weight.data = weights["W_vocab"]
+        self.devocab_and_softmax[0].weight.data = weights["W_devocab"]
+        self.finalLayerNorm.weight.data = weights["gamma_final"]
+        self.finalLayerNorm.bias.data = weights["beta_final"]
+
+        for layer_no, block in enumerate(self.transformerBlocks):
+            block.set_weights(weights, layer_no+1)
+
 
     def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
         """
@@ -169,7 +212,22 @@ class LanguageModel(nn.Module):
             - A tensor of shape (batch_size, sequence_len, vocab_size) containing the logits for each token in the vocabulary.
             Logits are the raw, unnormalized scores output by the model, which can be converted to probabilities using a softmax function.
         """
-        raise NotImplementedError("Implement forward as described in assignment document")
+        batch_size, seq_len = input_ids.shape
+        pos = torch.arange(seq_len)
+        intermediate = pos[None, :] < pos[:, None]
+        causal_attention = intermediate.float() * float("-inf")
+
+
+        intermediate1 = self.embed(input_ids)
+        intermediate2 = self.pe(input_ids)
+        intermediate3 = intermediate1 + intermediate2
+
+        for blk in self.transformerBlocks:
+            intermediate3 = blk(intermediate3, attention_mask, causal_attention)
+        
+        intermediate4 = self.finalLayerNorm(intermediate3)
+        return self.devocab_and_softmax(intermediate4)
+
 
 
 
