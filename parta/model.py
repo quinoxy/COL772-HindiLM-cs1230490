@@ -45,7 +45,9 @@ class MultiHeadAttention(nn.Module):
         self.d_model = config["d_model"]
         self.d_head = config["d_head"]
         self.tanh_mode = True if (config["mode"] == "tanh_clipped") else False
-        self.tau = config["tau"]
+        self.tau = None
+        if (self.tanh_mode):
+            self.tau = config["tau"]
         self.q_mat = nn.Linear(self.d_model, self.d_model, bias= False)
         self.k_mat = nn.Linear(self.d_model, self.d_model, bias= False)
         self.v_mat = nn.Linear(self.d_model, self.d_model, bias= False)
@@ -78,7 +80,7 @@ class MultiHeadAttention(nn.Module):
         S_mat = S_mat + causal_attention_mask
 
 
-        attention_mask = (1-attention_mask) * -1e9
+        attention_mask = (1-attention_mask).float() * -1e9
         attention_mask = attention_mask[:,None, None, :]
 
         S_mat = S_mat + attention_mask
@@ -140,12 +142,12 @@ class PositionalEncodingBlock(nn.Module):
     
     def forward(self, inputs):
         batch_size, seq_len = inputs.shape
-        pos = torch.arange(seq_len).unsqueeze(1)
-        i = torch.arange(0, self.d_model, 2)
+        pos = torch.arange(seq_len, device = inputs.device).unsqueeze(1)
+        i = torch.arange(0, self.d_model, 2, device = inputs.device)
         power = torch.exp(-math.log(10000.0) * i/self.d_model)
         angles = pos*power
         
-        encoding = torch.zeros(seq_len, self.d_model)
+        encoding = torch.zeros(seq_len, self.d_model, device = inputs.device)
 
         encoding[:, 0::2] = torch.sin(angles)
         encoding[:, 1::2] = torch.cos(angles)
@@ -176,8 +178,8 @@ class LanguageModel(nn.Module):
         self.finalLayerNorm = nn.LayerNorm(config["d_model"], elementwise_affine = True)
         
         self.devocab_and_softmax = nn.Sequential(
-            nn.Linear(config["d_model"], config["vocab_size"], bias = False),
-            nn.Softmax(dim = -1)
+            nn.Linear(config["d_model"], config["vocab_size"], bias = False)
+            #nn.Softmax(dim = -1)
         )
 
         
@@ -212,9 +214,9 @@ class LanguageModel(nn.Module):
             - A tensor of shape (batch_size, sequence_len, vocab_size) containing the logits for each token in the vocabulary.
             Logits are the raw, unnormalized scores output by the model, which can be converted to probabilities using a softmax function.
         """
-        batch_size, seq_len = input_ids.shape
-        pos = torch.arange(seq_len)
-        intermediate = pos[None, :] < pos[:, None]
+        _, seq_len = input_ids.shape
+        pos = torch.arange(seq_len, device = input_ids.device)
+        intermediate = pos[None, :] > pos[:, None]
         causal_attention = intermediate.float() * float("-inf")
 
 
@@ -251,7 +253,28 @@ def collate_fn(batch: Dict[str, List[torch.tensor]]) -> Dict[str, torch.Tensor]:
     Ensure that the function takes in a batch of data and outputs a dictionary of tensors ready to be fed into the model.
     """
     PAD_ID = 0  # Assume 0 is the padding token ID
-    raise NotImplementedError("Implement collate_fn as described in assignment document")
+    input_ids = batch["input_ids"]
+    attention_mask = batch["attention_mask"]
+
+    maxlen = max(x.shape[0] for x in input_ids)
+    final_dict = {}
+
+    input_id_tensor = torch.zeros(len(input_ids), maxlen, dtype = torch.long)
+    att_mask_tensor = torch.zeros(len(input_ids), maxlen, dtype = torch.long)
+
+    for i in range(len(input_ids)):
+        size = input_ids[i].shape[0]
+        input_id_tensor[i, :size] = input_ids[i]
+        att_mask_tensor[i, :size] = attention_mask[i]
+
+
+
+    final_dict["input_ids"] = input_id_tensor
+    final_dict["attention_mask"] = att_mask_tensor
+
+    return final_dict
+
+
 
 def main():
     pass

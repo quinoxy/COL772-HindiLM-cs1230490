@@ -102,7 +102,7 @@ def read_data(path: Path) -> Dict[str, Any]:
     outputs = []
     for dpath in files:
         # dpath = path / ff
-        data = torch.load(dpath)
+        data = torch.load(dpath, weights_only = False)
         input_ids.append(data['input_ids'])
         outputs.append(data['outputs'])
 
