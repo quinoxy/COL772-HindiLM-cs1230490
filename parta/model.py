@@ -49,8 +49,8 @@ class MultiHeadAttention(nn.Module):
         S_mat = S_mat + causal_attention_mask
 
 
-        attention_mask = (1-attention_mask).float() * -1e9
-        attention_mask = attention_mask[:,None, None, :]
+        # attention_mask = (1-attention_mask).float() * -1e9
+        # attention_mask = attention_mask[:,None, None, :]
 
         S_mat = S_mat + attention_mask
 
@@ -120,7 +120,7 @@ class PositionalEncodingBlock(nn.Module):
     
     def forward(self, inputs):
         batch_size, seq_len = inputs.shape
-        new_encoding = self.encoding[:seq_len, :seq_len].unsqueeze(0)
+        new_encoding = self.encoding[:seq_len, :self.d_model].unsqueeze(0)
         new_encoding = new_encoding.to(inputs.device)
         return new_encoding
 
@@ -157,8 +157,10 @@ class LanguageModel(nn.Module):
         mask = pos[None, :] > pos[:, None]
         causal_attention = torch.zeros(512, 512)
         causal_attention = causal_attention.masked_fill(mask, -1e9)
-        self.causal_attention = causal_attention[None, None, :, :]
-        
+        self.register_buffer(
+            "causal_attention",
+            causal_attention[None, None, :, :]
+        ) 
 
         
 
@@ -197,7 +199,9 @@ class LanguageModel(nn.Module):
         
 
         causal_attention = self.causal_attention[:,:,:seq_len,:seq_len]
-        causal_attention = causal_attention.to(input_ids.device)
+
+        attn_mask = (1-attention_mask).float() * -1e9
+        attn_mask = attn_mask[:,None,None,:]
 
 
         intermediate1 = self.embed(input_ids)
@@ -205,7 +209,7 @@ class LanguageModel(nn.Module):
         intermediate3 = intermediate1 + intermediate2
 
         for blk in self.transformerBlocks:
-            intermediate3 = blk(intermediate3, attention_mask, causal_attention)
+            intermediate3 = blk(intermediate3, attn_mask, causal_attention)
         
         intermediate4 = self.finalLayerNorm(intermediate3)
         return self.devocab_and_softmax(intermediate4)
