@@ -55,7 +55,7 @@ class MultiHeadAttention(nn.Module):
         
 
     def set_weights(self, weights : Dict[str, Any], layer_no):
-        self.concat_mat.weight.data = weights[f"W_{layer_no}_O"]
+        self.concat_mat.weight.data = weights[f"W_{layer_no}_O"].T
         for i in range(1,self.n_heads + 1):
             self.q_mat.weight.data[(i-1) * self.d_head : i * self.d_head, :] = weights[f"W_{layer_no}_Q_{i}"]
             self.k_mat.weight.data[(i-1) * self.d_head : i * self.d_head, :] = weights[f"W_{layer_no}_K_{i}"]
@@ -116,9 +116,9 @@ class TransformerBlock(nn.Module):
         
 
     def set_weights(self, weights : Dict[str, Any], layer_no):
-        self.seqblock[1].weight.data = weights[f"W_{layer_no}_up"]
+        self.seqblock[1].weight.data = weights[f"W_{layer_no}_up"].T
         self.seqblock[1].bias.data = weights[f"b_{layer_no}_up"]
-        self.seqblock[3].weight.data = weights[f"W_{layer_no}_down"]
+        self.seqblock[3].weight.data = weights[f"W_{layer_no}_down"].T
         self.seqblock[3].bias.data = weights[f"b_{layer_no}_down"]
         self.mha.set_weights(weights, layer_no)
         self.ln.weight.data = weights[f"gamma_{layer_no}_1"]
@@ -193,8 +193,8 @@ class LanguageModel(nn.Module):
         Parameters:
             - weights: A dictionary containing the model's weights. The structure of this dictionary will depend on how you design your model.
         """
-        self.embed.weight.data = weights["W_vocab"]
-        self.devocab_and_softmax[0].weight.data = weights["W_devocab"]
+        self.embed.weight.data = weights["W_vocab"].T
+        self.devocab_and_softmax[0].weight.data = weights["W_devocab"].T
         self.finalLayerNorm.weight.data = weights["gamma_final"]
         self.finalLayerNorm.bias.data = weights["beta_final"]
 
@@ -218,6 +218,7 @@ class LanguageModel(nn.Module):
         pos = torch.arange(seq_len, device = input_ids.device)
         intermediate = pos[None, :] > pos[:, None]
         causal_attention = intermediate.float() * float("-inf")
+        causal_attention = causal_attention[None, None, :, :]
 
 
         intermediate1 = self.embed(input_ids)
@@ -242,7 +243,6 @@ def load_model(config: Dict[str, Any], weights: Dict[str, Any]):
 
     model = LanguageModel(config)
     model.set_weights(weights)
-
     return model
 
 
