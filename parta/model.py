@@ -4,47 +4,13 @@ from typing import Any, Dict, List
 import math
 
 
-# class SingleAttentionHead(nn.Module):
-#     def __init__(self, config : Dict[str, Any]):
-#         super().__init__()
-#         d_model = config["d_model"]
-#         self.d_head = config["d_head"]
-#         self.tanh_mode = True if (config["mode"] == "tanh_clipped") else False
-#         self.tau = config["tau"]
-#         self.query = nn.Linear(d_model, self.d_head, bias = False)
-#         self.value = nn.Linear(d_model, self.d_head, bias = False)
-#         self.key = nn.Linear(d_model, self.d_head, bias = False)
-
-#     def set_weights(self, weights : Dict[str, Any], layer_no, head_no):
-#         query_string = f"W_{layer_no}_Q_{head_no}"
-#         key_string = f"W_{layer_no}_K_{head_no}"
-#         value_string = f"W_{layer_no}_V_{head_no}"
-#         self.query.weight.data = weights[query_string]
-#         self.key.weight.data = weights[key_string]
-#         self.value.weight.data = weights[value_string]
-
-#     def forward(self, input: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor :
-#         query = self.query(input)
-#         key = self.key(input)
-#         key = key.transpose(-2,-1)
-#         value = self.value(input)
-#         mat_S = torch.matmul(query, key) / math.sqrt(self.d_head)
-#         mat_S = mat_S + attention_mask
-#         if (self.tanh_mode):
-#             mat_S.tanh_()
-#             mat_S.mul_(self.tau)
-#         attn = torch.softmax(mat_S, dim = -1)
-#         return torch.matmul(attn, value)
-
-
-
 class MultiHeadAttention(nn.Module):
     def __init__(self, config : Dict[str, Any]):
         super().__init__()
         self.n_heads = config["n_heads"]
         self.d_model = config["d_model"]
         self.d_head = config["d_head"]
-        self.tanh_mode = True if (config["mode"] == "tanh_clipped") else False
+        self.tanh_mode = True if (config["mode"] == "tanh-clipped") else False
         self.tau = None
         if (self.tanh_mode):
             self.tau = config["tau"]
@@ -57,9 +23,9 @@ class MultiHeadAttention(nn.Module):
     def set_weights(self, weights : Dict[str, Any], layer_no):
         self.concat_mat.weight.data = weights[f"W_{layer_no}_O"].T
         for i in range(1,self.n_heads + 1):
-            self.q_mat.weight.data[(i-1) * self.d_head : i * self.d_head, :] = weights[f"W_{layer_no}_Q_{i}"]
-            self.k_mat.weight.data[(i-1) * self.d_head : i * self.d_head, :] = weights[f"W_{layer_no}_K_{i}"]
-            self.v_mat.weight.data[(i-1) * self.d_head : i * self.d_head, :] = weights[f"W_{layer_no}_V_{i}"]
+            self.q_mat.weight.data[:,(i-1) * self.d_head : i * self.d_head] = weights[f"W_{layer_no}_Q_{i}"].T
+            self.k_mat.weight.data[:,(i-1) * self.d_head : i * self.d_head] = weights[f"W_{layer_no}_K_{i}"].T
+            self.v_mat.weight.data[:,(i-1) * self.d_head : i * self.d_head] = weights[f"W_{layer_no}_V_{i}"].T
 
     def forward(self, inputs, attention_mask, causal_attention_mask):
 
@@ -71,12 +37,15 @@ class MultiHeadAttention(nn.Module):
         K_mat = self.k_mat(inputs).reshape(batch_size, seq_len, self.n_heads, self.d_head).transpose(1,2)
         V_mat = self.v_mat(inputs).reshape(batch_size, seq_len, self.n_heads, self.d_head).transpose(1,2)
 
-
         K_mat = K_mat.transpose(-2,-1)
 
         # S matrix has dim (batch_size, n_heads, seq_len, seq_len)
         S_mat = torch.matmul(Q_mat, K_mat) / math.sqrt(self.d_head)
 
+
+        if (self.tanh_mode):
+            S_mat = self.tau * torch.tanh(S_mat)
+            
         S_mat = S_mat + causal_attention_mask
 
 
@@ -85,9 +54,7 @@ class MultiHeadAttention(nn.Module):
 
         S_mat = S_mat + attention_mask
 
-        if (self.tanh_mode):
-            S_mat.tanh_()
-            S_mat.mul_(self.tau)
+        
         
         attn = torch.softmax(S_mat, dim = -1)
 
@@ -216,8 +183,11 @@ class LanguageModel(nn.Module):
         """
         _, seq_len = input_ids.shape
         pos = torch.arange(seq_len, device = input_ids.device)
-        intermediate = pos[None, :] > pos[:, None]
-        causal_attention = intermediate.float() * float("-inf")
+        mask = pos[None, :] > pos[:, None]
+        
+
+        causal_attention = torch.zeros(seq_len, seq_len, device = input_ids.device)
+        causal_attention = causal_attention.masked_fill(mask, -1e9)
         causal_attention = causal_attention[None, None, :, :]
 
 
@@ -242,6 +212,7 @@ def load_model(config: Dict[str, Any], weights: Dict[str, Any]):
     """
 
     model = LanguageModel(config)
+    print(config)
     model.set_weights(weights)
     return model
 
@@ -274,10 +245,3 @@ def collate_fn(batch: Dict[str, List[torch.tensor]]) -> Dict[str, torch.Tensor]:
 
     return final_dict
 
-
-
-def main():
-    pass
-
-if __name__ == "__main__":
-    main()
