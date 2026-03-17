@@ -1,4 +1,5 @@
 import heapq
+import json
 
 
 class BPETokenizer:
@@ -71,10 +72,30 @@ class BPETokenizer:
         return self.id_to_token.get(token_id, "<|UNK|>")
 
     def save(self, filepath):
-        raise NotImplementedError("Save method not implemented yet.")
+        with open(filepath, "w") as f:
+            json.dump({
+                "special_token_number": self.special_token_number,
+                "vocab": list(self.vocab),
+                "word_freq": self.word_freq,
+                "merges": self.merges,
+                "token_to_id": self.token_to_id,
+                "id_to_token": self.id_to_token,
+                "pair_freq": self.pair_freq,
+                "pair_heap": self.pair_heap
+            }, f)
 
     def load(self, filepath):
-        raise NotImplementedError("Load method not implemented yet.")
+        with open(filepath, "r") as f:
+            data = json.load(f)
+            self.special_token_number = data["special_token_number"]
+            self.vocab = set(data["vocab"])
+            self.word_freq = {tuple(k): v for k, v in data["word_freq"].items()}
+            self.merges = [tuple(merge) for merge in data["merges"]]
+            self.token_to_id = {k: v for k, v in data["token_to_id"].items()}
+            self.id_to_token = {int(k): v for k, v in data["id_to_token"].items()}
+            self.pair_freq = {tuple(k): v for k, v in data["pair_freq"].items()}
+            self.pair_heap = [(-freq, tuple(pair)) for pair, freq in data["pair_heap"]]
+            heapq.heapify(self.pair_heap)
     
     def get_vocab_size(self):
         return len(self.vocab)
