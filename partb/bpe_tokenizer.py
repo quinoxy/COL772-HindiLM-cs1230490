@@ -222,9 +222,11 @@ class BPETokenizer:
     
     def convert_string_to_tokens(self, str):
         tokens = []
-        for word in str.split():
-            chars = list(word) + ['<|WORDEND|>']
-            tokens.extend(chars)
+        for char in str:
+            if (char == " "):
+                tokens.append("<|WORDEND|>")
+            else:
+                tokens.append(char)
         return tokens
 
     def build_merge_ranking(self):
