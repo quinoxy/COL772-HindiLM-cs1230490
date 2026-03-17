@@ -21,13 +21,33 @@ class BPETokenizer:
             self.id_to_token[i] = self.special_tokens[i]
 
     def train(self, corpus):
-        raise NotImplementedError("Training method not implemented yet.")
+        self.build_init_vocab(corpus)
+
+        while len(self.vocab) < self.final_vocab_size:
+            self.do_iteration()
+            self.build_token_ids()
     
     def encode(self, text):
         raise NotImplementedError("Encoding method not implemented yet.")
 
     def decode(self, token_ids):
-        raise NotImplementedError("Decoding method not implemented yet.")
+        str_list = [self.token_id_to_string(token_id) for token_id in token_ids]
+        return "".join(str_list)
+
+        
+    def token_id_to_string(self, token_id):
+        if token_id < self.special_token_number:
+            if token_id == self.token_to_id["<|SOS|>"]:
+                return ""
+            elif token_id == self.token_to_id["<|EOS|>"]:
+                return ""
+            elif token_id == self.token_to_id["<|PAD|>"]:
+                return " "
+            elif token_id == self.token_to_id["<|UNK|>"]:
+                return "<|UNK|>"
+            else:
+                return ""
+        return self.id_to_token.get(token_id, "<|UNK|>")
 
     def save(self, filepath):
         raise NotImplementedError("Save method not implemented yet.")
