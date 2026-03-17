@@ -2,7 +2,7 @@ import heapq
 
 
 class BPETokenizer:
-    def __init__(self, vocab_size, special_tokens=None):
+    def __init__(self, vocab_size = 10000, special_tokens=None):
         self.final_vocab_size = vocab_size
         self.special_tokens = list(special_tokens) if special_tokens else []
         for tok in (["<|UNK|>", "<|SOS|>", "<|EOS|>", "<|PAD|>", "<|WORDEND|>"]):
@@ -32,7 +32,23 @@ class BPETokenizer:
         self.build_token_ids()
     
     def encode(self, text):
-        raise NotImplementedError("Encoding method not implemented yet.")
+        tokenized_text = self.convert_string_to_tokens(text)
+        #now we need to perform merges in order on the tokenized text
+        for merge in self.merges:
+            new_token = "".join(merge)
+            new_tokens = []
+            i = 0
+            while i < len(tokenized_text):
+                if i < len(tokenized_text) - 1 and (tokenized_text[i], tokenized_text[i + 1]) == merge:
+                    new_tokens.append(new_token)
+                    i += 2
+                else:
+                    new_tokens.append(tokenized_text[i])
+                    i += 1
+            tokenized_text = new_tokens
+                
+        token_ids = [self.token_to_id.get(token, self.get_unk_id()) for token in tokenized_text]
+        return token_ids
 
     def decode(self, token_ids):
         str_list = [self.token_id_to_string(token_id) for token_id in token_ids]
@@ -147,7 +163,12 @@ class BPETokenizer:
         self.build_pair_freq()
 
     
-
+    def convert_string_to_tokens(self, str):
+        tokens = []
+        for word in str.split():
+            chars = list(word) + ['<|WORDEND|>']
+            tokens.extend(chars)
+        return tokens
 
     
 
