@@ -1,12 +1,17 @@
+import heapq
+
+
 class BPETokenizer:
     def __init__(self, vocab_size, special_tokens=None):
         self.final_vocab_size = vocab_size
         self.special_tokens = list(special_tokens) if special_tokens else []
-        self.special_tokens.extend(["<|UNK|>", "<|SOS|>", "<|EOS|>", "<|PAD|>", "<|WORDEND|>"])
+        for tok in (["<|UNK|>", "<|SOS|>", "<|EOS|>", "<|PAD|>", "<|WORDEND|>"]):
+            if tok not in self.special_tokens:
+                self.special_tokens.append(tok)
 
         self.special_token_number = len(self.special_tokens)
 
-        self.vocab = set(special_tokens)
+        self.vocab = set(self.special_tokens)
         self.word_freq = {}
         self.merges = []
         self.token_to_id = {}
@@ -16,12 +21,15 @@ class BPETokenizer:
             self.token_to_id[self.special_tokens[i]] = i
             self.id_to_token[i] = self.special_tokens[i]
 
+        self.pair_heap = []
+        self.pair_freq = {}
+
     def train(self, corpus):
         self.build_init_vocab(corpus)
 
         while len(self.vocab) < self.final_vocab_size:
             self.do_iteration()
-            self.build_token_ids()
+        self.build_token_ids()
     
     def encode(self, text):
         raise NotImplementedError("Encoding method not implemented yet.")
@@ -53,13 +61,63 @@ class BPETokenizer:
         raise NotImplementedError("Load method not implemented yet.")
     
     def get_vocab_size(self):
-        raise NotImplementedError("Get vocab size method not implemented yet.")
+        return len(self.vocab)
     
     def get_unk_id(self):
         return self.token_to_id["<|UNK|>"]
 
     def do_iteration(self):
-        pass
+        while self.pair_heap:
+            freq, pair = heapq.heappop(self.pair_heap)
+            if self.pair_freq.get(pair, 0) != -freq: #defensive check for stale pairs
+                continue
+            best_pair = pair
+            break
+        else:
+            return #no merge
+        
+        new_token = "".join(best_pair)
+        self.merges.append(best_pair)
+        self.vocab.add(new_token)
+        self.pair_freq[best_pair] = 0
+        heapq.heappush(self.pair_heap, (0, best_pair))
+
+        for word, freq in list(self.word_freq.items()):
+            #in this loop we update the word and pair frequencies and also the heap
+            if best_pair in zip(word, word[1:]):
+                new_word = []
+                i = 0
+                while i < len(word):
+                    if i < len(word) - 1 and (word[i], word[i + 1]) == best_pair:
+                        new_word.append(new_token)
+                        if (i>=1):
+                            prev_pair = (word[i-1], word[i])
+                            self.pair_freq[prev_pair] = self.pair_freq.get(prev_pair, 0) - freq
+                            heapq.heappush(self.pair_heap, (-self.pair_freq[prev_pair], prev_pair))
+
+                            new_pair = (word[i-1], new_token)
+                            self.pair_freq[new_pair] = self.pair_freq.get(new_pair, 0) + freq
+                            heapq.heappush(self.pair_heap, (-self.pair_freq[new_pair], new_pair))
+
+                        if (i < len(word) - 2):
+                            next_pair = (word[i + 1], word[i + 2])
+                            self.pair_freq[next_pair] = self.pair_freq.get(next_pair, 0) - freq
+                            heapq.heappush(self.pair_heap, (-self.pair_freq[next_pair], next_pair))
+
+                            new_pair = (new_token, word[i + 2])
+                            self.pair_freq[new_pair] = self.pair_freq.get(new_pair, 0) + freq
+                            heapq.heappush(self.pair_heap, (-self.pair_freq[new_pair], new_pair))
+
+                        i += 2
+
+                    else:
+                        new_word.append(word[i])
+                        i += 1
+                new_word_tuple = tuple(new_word)
+                self.word_freq[new_word_tuple] = self.word_freq.pop(word)
+
+
+        
     
     def build_token_ids(self):
         index = len(self.token_to_id)
@@ -70,7 +128,14 @@ class BPETokenizer:
                 index += 1
         
 
-    
+    def build_pair_freq(self):
+        self.pair_freq = {}
+        for word, freq in self.word_freq.items():
+            for i in range(len(word) - 1):
+                pair = (word[i], word[i + 1])
+                self.pair_freq[pair] = self.pair_freq.get(pair, 0) + freq
+        self.pair_heap = [(-freq, pair) for pair, freq in self.pair_freq.items()]
+        heapq.heapify(self.pair_heap)
 
     def build_init_vocab(self, corpus):
         for sentence in corpus:
@@ -78,6 +143,8 @@ class BPETokenizer:
                 chars = tuple(list(word) + ['<|WORDEND|>'])
                 self.word_freq[chars] = self.word_freq.get(chars, 0) + 1
                 self.vocab.update(chars)
+        
+        self.build_pair_freq()
 
     
 
