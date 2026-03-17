@@ -2,11 +2,7 @@ class BPETokenizer:
     def __init__(self, vocab_size, special_tokens=None):
         self.final_vocab_size = vocab_size
         self.special_tokens = list(special_tokens) if special_tokens else []
-        self.special_tokens.append("<|UNK|>")
-        self.special_tokens.append("<|SOS|>")
-        self.special_tokens.append("<|EOS|>")
-        self.special_tokens.append("<|PAD|>")
-
+        self.special_tokens.extend(["<|UNK|>", "<|SOS|>", "<|EOS|>", "<|PAD|>", "<|WORDEND|>"])
 
         self.special_token_number = len(self.special_tokens)
 
@@ -45,8 +41,9 @@ class BPETokenizer:
                 return " "
             elif token_id == self.token_to_id["<|UNK|>"]:
                 return "<|UNK|>"
-            else:
-                return ""
+            elif token_id == self.token_to_id["<|WORDEND|>"]:
+                return " "
+            return ""
         return self.id_to_token.get(token_id, "<|UNK|>")
 
     def save(self, filepath):
@@ -78,7 +75,7 @@ class BPETokenizer:
     def build_init_vocab(self, corpus):
         for sentence in corpus:
             for word in sentence.split():
-                chars = tuple(list(word) + ['<WORDEND>'])
+                chars = tuple(list(word) + ['<|WORDEND|>'])
                 self.word_freq[chars] = self.word_freq.get(chars, 0) + 1
                 self.vocab.update(chars)
 
