@@ -1,5 +1,6 @@
 import heapq
 import json
+import os
 
 
 class BPETokenizer:
@@ -24,6 +25,7 @@ class BPETokenizer:
 
         self.pair_heap = []
         self.pair_freq = {}
+        self.merge_rank = {}
 
     def train(self, corpus):
         self.build_init_vocab(corpus)
@@ -31,23 +33,38 @@ class BPETokenizer:
         while len(self.vocab) < self.final_vocab_size:
             self.do_iteration()
         self.build_token_ids()
+        self.build_merge_ranking()
     
     def encode(self, text):
         tokenized_text = self.convert_string_to_tokens(text)
-        #now we need to perform merges in order on the tokenized text
-        for merge in self.merges:
-            new_token = "".join(merge)
+
+        #using merge ranking to make encoding faster
+        while True:
+            best_pair = None
+            best_rank = float("inf")
+
+            for i in range(len(tokenized_text) - 1):
+                pair = (tokenized_text[i], tokenized_text[i + 1])
+                rank = self.merge_rank.get(pair)
+                if rank is not None and rank < best_rank:
+                    best_rank = rank
+                    best_pair = pair
+
+            if best_pair is None:
+                break
+
+            merged_token = "".join(best_pair)
             new_tokens = []
             i = 0
             while i < len(tokenized_text):
-                if i < len(tokenized_text) - 1 and (tokenized_text[i], tokenized_text[i + 1]) == merge:
-                    new_tokens.append(new_token)
+                if i < len(tokenized_text) - 1 and (tokenized_text[i], tokenized_text[i + 1]) == best_pair:
+                    new_tokens.append(merged_token)
                     i += 2
                 else:
                     new_tokens.append(tokenized_text[i])
                     i += 1
             tokenized_text = new_tokens
-                
+
         token_ids = [self.token_to_id.get(token, self.get_unk_id()) for token in tokenized_text]
         return token_ids
 
@@ -69,32 +86,51 @@ class BPETokenizer:
             elif token_id == self.token_to_id["<|WORDEND|>"]:
                 return " "
             return ""
+        stri = self.id_to_token.get(token_id, "<|UNK|>")
+        if (len(stri)>11):
+            if (stri[-11:] == "<|WORDEND|>"):
+                return stri[:-11] + " "
         return self.id_to_token.get(token_id, "<|UNK|>")
 
     def save(self, filepath):
+        # Accept either a full filepath or a directory. If a directory is given, write to tokenizer.json inside it.
+        if os.path.isdir(filepath):
+            os.makedirs(filepath, exist_ok=True)
+            filepath = os.path.join(filepath, "tokenizer.json")
+
+        # JSON requires dict keys to be primitives (str/int/float/bool/None).
+        # Convert tuple keys to lists for serialization.
+        serializable_word_freq = [[list(k), v] for k, v in self.word_freq.items()]
+        serializable_pair_freq = [[list(k), v] for k, v in self.pair_freq.items()]
+
         with open(filepath, "w") as f:
             json.dump({
                 "special_token_number": self.special_token_number,
                 "vocab": list(self.vocab),
-                "word_freq": self.word_freq,
+                "word_freq": serializable_word_freq,
                 "merges": self.merges,
                 "token_to_id": self.token_to_id,
                 "id_to_token": self.id_to_token,
-                "pair_freq": self.pair_freq,
+                "pair_freq": serializable_pair_freq,
                 "pair_heap": self.pair_heap
             }, f)
 
     def load(self, filepath):
+        # Accept either a full filepath or a directory. If a directory is given, read tokenizer.json inside it.
+        if os.path.isdir(filepath):
+            filepath = os.path.join(filepath, "tokenizer.json")
+
         with open(filepath, "r") as f:
             data = json.load(f)
             self.special_token_number = data["special_token_number"]
             self.vocab = set(data["vocab"])
-            self.word_freq = {tuple(k): v for k, v in data["word_freq"].items()}
+            self.word_freq = {tuple(k): v for k, v in data["word_freq"]}
             self.merges = [tuple(merge) for merge in data["merges"]]
             self.token_to_id = {k: v for k, v in data["token_to_id"].items()}
             self.id_to_token = {int(k): v for k, v in data["id_to_token"].items()}
-            self.pair_freq = {tuple(k): v for k, v in data["pair_freq"].items()}
-            self.pair_heap = [(-freq, tuple(pair)) for pair, freq in data["pair_heap"]]
+            self.pair_freq = {tuple(k): v for k, v in data["pair_freq"]}
+            self.pair_heap = [(freq, tuple(pair)) for freq, pair in data["pair_heap"]]
+            self.build_merge_ranking()
             heapq.heapify(self.pair_heap)
     
     def get_vocab_size(self):
@@ -191,7 +227,9 @@ class BPETokenizer:
             tokens.extend(chars)
         return tokens
 
-    
+    def build_merge_ranking(self):
+        self.merge_rank = {merge: rank for rank, merge in enumerate(self.merges)}
+
 
 
     
