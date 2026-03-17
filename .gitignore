@@ -208,6 +208,6 @@ __marimo__/
 
 parta/data
 partb/final_tokenizer
-./partb/evaluate_tokenizer.py
-./run_part*.sh
+partb/evaluate_tokenizer.py
+run_part*
 
