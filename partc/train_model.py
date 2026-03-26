@@ -107,7 +107,8 @@ def main(args):
         print(f"Validation BPC: {bpc:.4f}")
         print(f"Validation Correct BPC: {correct_bpc:.4f}")
 
-        print(f"Epoch {epoch + 1}/{max_epochs}, Train Loss: {train_loss:.4f}, Valid BPC: {bpc:.4f}")
+        with open("/kaggle/working/train.log", "a") as f:
+            f.write(f"Epoch {epoch}, Loss {train_loss}, BPC {bpc}, Correct BPC {correct_bpc}\n")
 
         if bpc < best_loss:
             best_loss = bpc
