@@ -39,7 +39,7 @@ def main(args):
 
     best_loss = float("inf")
     start_time = time.time()
-    max_epochs = 1
+    max_epochs = 50
 
     for epoch in range(max_epochs):
         model.train()
@@ -89,6 +89,7 @@ def main(args):
 
         # Check time limit
         elapsed_time = time.time() - start_time
+        print(f"Elapsed time: {elapsed_time:.2f} seconds")
         if elapsed_time > 23 * 900:
             print("Time limit exceeded. Stopping training.")
             break
