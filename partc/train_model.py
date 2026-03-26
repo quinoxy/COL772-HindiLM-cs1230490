@@ -66,6 +66,9 @@ def main(args):
         total_loss = 0.0
         total_chars = 0
 
+        total_loss_correct = 0.0
+        total_tokens_correct = 0
+
         for batch in valid_loader:
             input_ids = batch["input_ids"].to(device)
             attention_mask = batch["attention_mask"].to(device)
@@ -82,8 +85,27 @@ def main(args):
             total_loss += loss.item() * num_tokens
             total_chars += num_tokens
 
+
+
+
+            mask = attention_mask[:, 1:].reshape(-1)  # flatten
+            mask = mask.float()  # Convert to float for multiplication
+            per_token_loss = nn.functional.cross_entropy(
+                    outputs.view(-1, config["vocab_size"]),
+                    input_ids[:, 1:].reshape(-1),
+                    reduction = 'none'
+                )
+
+            # Apply mask (ignore padding)
+            masked_loss = per_token_loss * mask
+
+            total_loss_correct += masked_loss.sum().item()
+            total_tokens_correct += mask.sum().item()
+
         bpc = total_loss / (total_chars * math.log(2))
+        correct_bpc = total_loss_correct / (total_tokens_correct * math.log(2))
         print(f"Validation BPC: {bpc:.4f}")
+        print(f"Validation Correct BPC: {correct_bpc:.4f}")
 
         print(f"Epoch {epoch + 1}/{max_epochs}, Train Loss: {train_loss:.4f}, Valid BPC: {bpc:.4f}")
 
