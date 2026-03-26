@@ -66,9 +66,6 @@ def main(args):
         total_loss = 0.0
         total_chars = 0
 
-        total_loss_correct = 0.0
-        total_tokens_correct = 0
-
         for batch in valid_loader:
             input_ids = batch["input_ids"].to(device)
             attention_mask = batch["attention_mask"].to(device)
@@ -77,39 +74,22 @@ def main(args):
                 outputs = model(input_ids[:, :-1], attention_mask[:, :-1])
                 loss = criterion(
                     outputs.view(-1, config["vocab_size"]),
-                    input_ids[:, 1:].reshape(-1)
+                    input_ids[:, 1:].reshape(-1),
+                    ignore_index=tokenizer.pad_token_id  # Ignore padding tokens
                 )
 
-            num_tokens = input_ids.size(0) * (input_ids.size(1) - 1)
+            # Calculate the number of non-padding tokens
+            num_tokens = attention_mask[:, 1:].sum().item()
 
             total_loss += loss.item() * num_tokens
             total_chars += num_tokens
 
-
-
-
-            mask = attention_mask[:, 1:].reshape(-1)  # flatten
-            mask = mask.float()  # Convert to float for multiplication
-            per_token_loss = nn.functional.cross_entropy(
-                    outputs.view(-1, config["vocab_size"]),
-                    input_ids[:, 1:].reshape(-1),
-                    reduction = 'none'
-                )
-
-            # Apply mask (ignore padding)
-            masked_loss = per_token_loss * mask
-
-            total_loss_correct += masked_loss.sum().item()
-            total_tokens_correct += mask.sum().item()
-
         bpc = total_loss / (total_chars * math.log(2))
-        correct_bpc = total_loss_correct / (total_tokens_correct * math.log(2))
         print(f"Validation BPC: {bpc:.4f}")
-        print(f"Validation Correct BPC: {correct_bpc:.4f}")
 
         with open("/kaggle/working/train.log", "a") as f:
-            f.write(f"Epoch {epoch}, Loss {train_loss}, BPC {bpc}, Correct BPC {correct_bpc}\n")
-        print(f"Epoch {epoch}, Loss {train_loss}, BPC {bpc}, Correct BPC {correct_bpc}")
+            f.write(f"Epoch {epoch}, Loss {train_loss}, BPC {bpc}\n")
+        print(f"Epoch {epoch}, Loss {train_loss}, BPC {bpc}")
 
         if bpc < best_loss:
             best_loss = bpc
