@@ -1,16 +1,44 @@
 from partb.bpe_tokenizer import BPETokenizer
-from parta.model import LanguageModel, collate_fn
+from parta.model import LanguageModel
 import torch
+from parta.model import collate_fn
+
+def load_model_and_tokenizer(model_path: str, tokenizer_path: str):
+    """
+    Load the model and tokenizer from the specified paths.
+
+    Args:
+        model_path (str): Path to the model checkpoint.
+        tokenizer_path (str): Path to the tokenizer.
+
+    Returns:
+        model (LanguageModel): The loaded language model.
+        tokenizer (BPETokenizer): The loaded tokenizer.
+    """
+    # Load the tokenizer
+    tokenizer = BPETokenizer()
+    tokenizer.load(tokenizer_path)
+
+    # Load the model configuration and weights
+    model_config = {
+        "d_model": 256,
+        "d_head": 32,
+        "n_heads": 8,
+        "n_layers": 4,
+        "vocab_size": tokenizer.get_vocab_size(),
+        "mode": "standard",
+        "tau": 1.5
+    }
+
+    model = LanguageModel(model_config)
+    model.load_state_dict(torch.load(model_path))
+    model.eval()
+
+    return model, tokenizer
+
 
 print("This script checks whether your model and tokenizer are compatible with the expected format for the assignment.")
 print("Make sure to implement the load_model_and_tokenizer function to load your trained model and tokenizer from the checkpoint directory, and ensure that your model and tokenizer are compatible with the check_format function.")
-
-def load_model_and_tokenizer(model_path, tokenizer_path):
-    """
-    CHANGE THIS FUNCTION TO LOAD YOUR TRAINED MODEL AND TOKENIZER FROM THE CHECKPOINT DIRECTORY.
-    """
-    raise NotImplementedError("You need to implement the load_model_and_tokenizer function to load your trained model and tokenizer from the checkpoint directory.")
-
 
 def check_format(model, tokenizer, texts):
     """

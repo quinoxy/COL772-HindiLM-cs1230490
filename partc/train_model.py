@@ -72,22 +72,25 @@ def main(args):
 
             with torch.no_grad():
                 outputs = model(input_ids[:, :-1], attention_mask[:, :-1])
-                loss = criterion(outputs.view(-1, config["vocab_size"]), input_ids[:, 1:].reshape(-1))
+                loss = criterion(
+                    outputs.view(-1, config["vocab_size"]),
+                    input_ids[:, 1:].reshape(-1)
+                )
 
-            total_loss += loss.item() * input_ids.size(0) * input_ids.size(1)  
-            total_chars += input_ids.size(0) * input_ids.size(1)
+            num_tokens = input_ids.size(0) * (input_ids.size(1) - 1)
+
+            total_loss += loss.item() * num_tokens
+            total_chars += num_tokens
 
         bpc = total_loss / (total_chars * math.log(2))
         print(f"Validation BPC: {bpc:.4f}")
 
         print(f"Epoch {epoch + 1}/{max_epochs}, Train Loss: {train_loss:.4f}, Valid BPC: {bpc:.4f}")
 
-        # Save the best model
         if bpc < best_loss:
             best_loss = bpc
             save_model(model, args.output_model_path)
 
-        # Check time limit
         elapsed_time = time.time() - start_time
         print(f"Elapsed time: {elapsed_time:.2f} seconds")
         if elapsed_time > 23 * 900:
