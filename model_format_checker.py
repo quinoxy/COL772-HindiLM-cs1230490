@@ -31,7 +31,9 @@ def load_model_and_tokenizer(model_path: str, tokenizer_path: str):
     }
 
     model = LanguageModel(model_config)
-    model.load_state_dict(torch.load(model_path))
+    # Load the model weights from the specified model_path
+    model_weights = torch.load(model_path)
+    model.load_state_dict(model_weights)
     model.eval()
 
     return model, tokenizer
