@@ -72,7 +72,7 @@ def main(args):
 
             with torch.no_grad():
                 outputs = model(input_ids[:, :-1], attention_mask[:, :-1])
-                loss = nn.CrossEntropyLoss(
+                loss = nn.functional.cross_entropy(
                     outputs.view(-1, config["vocab_size"]),
                     input_ids[:, 1:].reshape(-1),
                     ignore_index= PAD_ID # Ignore padding tokens
