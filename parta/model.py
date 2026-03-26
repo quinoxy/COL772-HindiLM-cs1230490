@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.init as init
 from typing import Any, Dict, List
 import math
 
@@ -18,7 +19,11 @@ class MultiHeadAttention(nn.Module):
         self.k_mat = nn.Linear(self.d_model, self.d_model, bias= False)
         self.v_mat = nn.Linear(self.d_model, self.d_model, bias= False)
         self.concat_mat = nn.Linear(self.d_model, self.d_model, bias= False)
-        
+
+        init.xavier_normal_(self.q_mat.weight)
+        init.xavier_normal_(self.k_mat.weight)
+        init.xavier_normal_(self.v_mat.weight)
+        init.xavier_normal_(self.concat_mat.weight)
 
     def set_weights(self, weights : Dict[str, Any], layer_no):
         self.concat_mat.weight.data = weights[f"W_{layer_no}_O"].T
@@ -70,6 +75,11 @@ class SwiGLU(nn.Module):
         self.w1 = nn.Linear(dim, hidden_dim)
         self.w2 = nn.Linear(dim, hidden_dim)
         self.out = nn.Linear(hidden_dim, dim)
+
+        init.xavier_normal_(self.w1.weight)
+        init.xavier_normal_(self.w2.weight)
+        init.xavier_normal_(self.out.weight)
+
     def forward(self, x):
         return self.out(nn.functional.silu(self.w1(x)) * self.w2(x))
     
@@ -83,9 +93,12 @@ class TransformerBlock(nn.Module):
         
         self.seqblock = nn.Sequential(
             nn.LayerNorm(self.d_model, elementwise_affine = True),
-            nn.SwiGLU(self.d_model, 4*self.d_model)
+            SwiGLU(self.d_model, 4*self.d_model)
         )
-        
+
+        for layer in self.seqblock:
+            if isinstance(layer, nn.Linear):
+                init.xavier_normal_(layer.weight)
 
     def set_weights(self, weights : Dict[str, Any], layer_no):
         self.seqblock[1].weight.data = weights[f"W_{layer_no}_up"].T
@@ -144,6 +157,7 @@ class LanguageModel(nn.Module):
         super().__init__()
 
         self.embed = nn.Embedding(config["vocab_size"], config["d_model"])
+        nn.init.uniform_(self.embed.weight, -0.1, 0.1)
         
         self.pe = PositionalEncodingBlock(config)
 
@@ -155,8 +169,9 @@ class LanguageModel(nn.Module):
         
         self.devocab_and_softmax = nn.Sequential(
             nn.Linear(config["d_model"], config["vocab_size"], bias = False)
-            #nn.Softmax(dim = -1)
         )
+
+        self.devocab_and_softmax[0].weight = self.embed.weight
 
         pos = torch.arange(512)
         mask = pos[None, :] > pos[:, None]
