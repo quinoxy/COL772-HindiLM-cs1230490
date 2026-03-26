@@ -109,6 +109,7 @@ def main(args):
 
         with open("/kaggle/working/train.log", "a") as f:
             f.write(f"Epoch {epoch}, Loss {train_loss}, BPC {bpc}, Correct BPC {correct_bpc}\n")
+        print(f"Epoch {epoch}, Loss {train_loss}, BPC {bpc}, Correct BPC {correct_bpc}")
 
         if bpc < best_loss:
             best_loss = bpc
