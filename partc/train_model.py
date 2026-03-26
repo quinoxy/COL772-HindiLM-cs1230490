@@ -39,7 +39,7 @@ def main(args):
 
     best_loss = float("inf")
     start_time = time.time()
-    max_epochs = 100
+    max_epochs = 1
 
     for epoch in range(max_epochs):
         model.train()
