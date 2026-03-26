@@ -9,7 +9,7 @@ from .utils import load_data, save_model
 import math
 import argparse
 
-
+PAD_ID = 0
 def main(args):
 
     tokenizer = BPETokenizer()
@@ -75,7 +75,7 @@ def main(args):
                 loss = criterion(
                     outputs.view(-1, config["vocab_size"]),
                     input_ids[:, 1:].reshape(-1),
-                    ignore_index=tokenizer.pad_token_id  # Ignore padding tokens
+                    ignore_index= PAD_ID # Ignore padding tokens
                 )
 
             # Calculate the number of non-padding tokens
