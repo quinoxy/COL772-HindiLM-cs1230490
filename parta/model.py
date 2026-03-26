@@ -64,7 +64,15 @@ class MultiHeadAttention(nn.Module):
         concatenated_result = torch.matmul(attn, V_mat).transpose(1,2).reshape(batch_size, seq_len, self.d_model)
         return self.concat_mat(concatenated_result)
 
-
+class SwiGLU(nn.Module):
+    def __init__(self, dim, hidden_dim):
+        super().__init__()
+        self.w1 = nn.Linear(dim, hidden_dim)
+        self.w2 = nn.Linear(dim, hidden_dim)
+        self.out = nn.Linear(hidden_dim, dim)
+    def forward(self, x):
+        return self.out(nn.functional.silu(self.w1(x)) * self.w2(x))
+    
 class TransformerBlock(nn.Module):
 
     def __init__(self, config : Dict[str, Any]):
@@ -75,10 +83,7 @@ class TransformerBlock(nn.Module):
         
         self.seqblock = nn.Sequential(
             nn.LayerNorm(self.d_model, elementwise_affine = True),
-            nn.Linear(self.d_model, 4 * self.d_model),
-            nn.GELU(),
-            nn.Linear(4*self.d_model, self.d_model)
-
+            nn.SwiGLU(self.d_model, 4*self.d_model)
         )
         
 
