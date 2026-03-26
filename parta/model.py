@@ -256,25 +256,23 @@ def collate_fn(batch: Dict[str, List[torch.tensor]]) -> Dict[str, torch.Tensor]:
     However, DO NOT CHANGE THE SIGNATURE OF THIS FUNCTION.
     Ensure that the function takes in a batch of data and outputs a dictionary of tensors ready to be fed into the model.
     """
-    PAD_ID = 0  # Assume 0 is the padding token ID
-    input_ids = batch["input_ids"]
-    attention_mask = batch["attention_mask"]
+    PAD_ID = 0
+
+    input_ids = [item["input_ids"] for item in batch]
+    attention_mask = [item["attention_mask"] for item in batch]
 
     maxlen = max(x.shape[0] for x in input_ids)
-    final_dict = {}
 
-    input_id_tensor = torch.zeros(len(input_ids), maxlen, dtype = torch.long)
-    att_mask_tensor = torch.zeros(len(input_ids), maxlen, dtype = torch.long)
+    input_id_tensor = torch.full((len(input_ids), maxlen), PAD_ID, dtype=torch.long)
+    att_mask_tensor = torch.zeros(len(input_ids), maxlen, dtype=torch.long)
 
     for i in range(len(input_ids)):
         size = input_ids[i].shape[0]
         input_id_tensor[i, :size] = input_ids[i]
         att_mask_tensor[i, :size] = attention_mask[i]
 
-
-
-    final_dict["input_ids"] = input_id_tensor
-    final_dict["attention_mask"] = att_mask_tensor
-
-    return final_dict
+    return {
+        "input_ids": input_id_tensor,
+        "attention_mask": att_mask_tensor
+    }
 
