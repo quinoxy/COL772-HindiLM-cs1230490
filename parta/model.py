@@ -252,14 +252,21 @@ def load_model(config: Dict[str, Any], weights: Dict[str, Any]):
 
 def collate_fn(batch: Dict[str, List[torch.tensor]]) -> Dict[str, torch.Tensor]:
     """
-    This is a sample code. Replace with your own.
-    However, DO NOT CHANGE THE SIGNATURE OF THIS FUNCTION.
-    Ensure that the function takes in a batch of data and outputs a dictionary of tensors ready to be fed into the model.
+    Collate function to prepare a batch of data for the model.
+    Handles padding and ensures tensors are properly formatted.
     """
     PAD_ID = 0
 
-    input_ids = [item["input_ids"] for item in batch]
-    attention_mask = [item["attention_mask"] for item in batch]
+    # Ensure batch contains the required keys
+    if not all(key in batch for key in ["input_ids", "attention_mask"]):
+        raise ValueError("Batch must contain 'input_ids' and 'attention_mask' keys.")
+
+    input_ids = batch["input_ids"]
+    attention_mask = batch["attention_mask"]
+
+    # Ensure input_ids and attention_mask are lists of tensors
+    if not all(isinstance(item, torch.Tensor) for item in input_ids + attention_mask):
+        raise ValueError("All items in 'input_ids' and 'attention_mask' must be torch.Tensor.")
 
     maxlen = max(x.shape[0] for x in input_ids)
 

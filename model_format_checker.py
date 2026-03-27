@@ -2,6 +2,7 @@ from partb.bpe_tokenizer import BPETokenizer
 from parta.model import LanguageModel
 import torch
 from parta.model import collate_fn
+import os
 
 def load_model_and_tokenizer(model_path: str, tokenizer_path: str):
     """
@@ -31,6 +32,10 @@ def load_model_and_tokenizer(model_path: str, tokenizer_path: str):
     }
 
     model = LanguageModel(model_config)
+    # Check if model_path is a directory and append the model file name if needed
+    if os.path.isdir(model_path):
+        model_path = os.path.join(model_path, "best_model.pth")
+
     # Load the model weights from the specified model_path
     model_weights = torch.load(model_path)
     model.load_state_dict(model_weights)

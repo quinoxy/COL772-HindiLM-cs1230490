@@ -10,6 +10,17 @@ import math
 import argparse
 
 PAD_ID = 0
+
+def dict_batch_collate_wrapper(collate_fn):
+    def wrapper(batch):
+        # Convert List[Dict] → Dict[List]
+        batch_dict = {
+            "input_ids": [item["input_ids"] for item in batch],
+            "attention_mask": [item["attention_mask"] for item in batch]
+        }
+        return collate_fn(batch_dict)
+    return wrapper
+
 def main(args):
 
     tokenizer = BPETokenizer()
@@ -18,8 +29,9 @@ def main(args):
     train_data = load_data(args.train_path, tokenizer)
     valid_data = load_data(args.valid_path, tokenizer)
 
-    train_loader = DataLoader(train_data, batch_size=32, shuffle=True, collate_fn=collate_fn)
-    valid_loader = DataLoader(valid_data, batch_size=32, shuffle=False, collate_fn=collate_fn)
+    wrapped_collate_fn = dict_batch_collate_wrapper(collate_fn)
+    train_loader = DataLoader(train_data, batch_size=32, shuffle=True, collate_fn=wrapped_collate_fn)
+    valid_loader = DataLoader(valid_data, batch_size=32, shuffle=False, collate_fn=wrapped_collate_fn)
 
     config = {
         "d_model": 256,
