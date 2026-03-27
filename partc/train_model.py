@@ -46,7 +46,7 @@ def main(args):
     model = LanguageModel(config)
     model = model.to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=0.005)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.0003)
     criterion = nn.CrossEntropyLoss()
 
     best_loss = float("inf")
